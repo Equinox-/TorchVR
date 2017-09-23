@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<PluginManifest xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Name>Virtual Reality</Name>
+  <Guid>34d7de14-8621-41ad-984b-7d7d4b8d7ff3</Guid>
+  <Repository>Equinox-/TorchVR</Repository>
+  <Version>v1.0.0</Version>
+</PluginManifest>
