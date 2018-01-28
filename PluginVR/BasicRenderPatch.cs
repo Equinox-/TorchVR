@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Text;
 using System.Threading.Tasks;
+using NLog;
 using Torch.Managers.PatchManager;
 using Torch.Managers.PatchManager.MSIL;
 using Torch.Managers.PatchManager.Transpile;
@@ -69,6 +70,13 @@ namespace PluginVR
             "SharpDX.Direct3D11.InputLayout, SharpDX.Direct3D11", Types.TypeInt32, Types.TypeInt32, Types.TypeInt32, Types.TypeInt32 })]
         private static MethodInfo _foliageGenRecordCommands;
 
+
+        [ReflectedMethodInfo(null, "RecordCommands", TypeName = "VRageRender.MyFoliageRenderingPass, " + Types.LibRenderDx11, ParameterNames = new[]
+        {
+            Types.TypeRenderableProxy, Types.TypeIVertexBuffer, Types.TypeInt32
+        })]
+        private static MethodInfo _foliageRenderRecordCommands;
+
         [ReflectedMethodInfo(null, "Render", TypeName = "VRageRender.MyCloudRenderer, " + Types.LibRenderDx11)]
         private static MethodInfo _cloudRender;
 
@@ -125,12 +133,46 @@ namespace PluginVR
             // TODO 
             //            ctx.GetPattern(_spritesDraw).Transpilers.Add(fixer);
             //            ctx.GetPattern(_screenDrawQuad).Transpilers.Add(fixer);
+
+            ctx.GetPattern(_foliageRenderRecordCommands).Transpilers.Add(Method(nameof(FoliageRenderFix)));
         }
 
         private static MethodInfo Method(string name)
         {
             return typeof(BasicRenderPatch).GetMethod(name,
                 BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
+        }
+
+        private static IEnumerable<MsilInstruction> FoliageRenderFix(IEnumerable<MsilInstruction> src)
+        {
+            foreach (var call in src)
+            {
+                if ((call.OpCode == OpCodes.Callvirt || call.OpCode == OpCodes.Call) && call.Operand is MsilOperandInline<MethodBase> op
+                    && op.Value == _rcDrawAuto)
+                {
+                    var end = new MsilLabel();
+                    var noStereo = new MsilLabel();
+                    yield return new MsilInstruction(OpCodes.Call).InlineValue(_stereoRenderEnable.GetMethod);
+                    yield return new MsilInstruction(OpCodes.Brfalse).InlineTarget(noStereo);
+                    yield return new MsilInstruction(OpCodes.Dup); // [... RC, RC]
+                    yield return new MsilInstruction(OpCodes.Call).InlineValue(_beginDrawGBufferPass); // [... RC]
+                    yield return new MsilInstruction(OpCodes.Dup); // [... RC, RC]
+                    yield return new MsilInstruction(call.OpCode).InlineValue(_rcDrawAuto); // [... RC]
+                    yield return new MsilInstruction(OpCodes.Dup); // [... RC, RC]
+                    yield return new MsilInstruction(OpCodes.Call).InlineValue(_switchDrawGBufferPass); // [... RC]
+                    yield return new MsilInstruction(OpCodes.Dup); // [... RC, RC]
+                    yield return new MsilInstruction(call.OpCode).InlineValue(_rcDrawAuto); // [... RC]
+                    yield return new MsilInstruction(OpCodes.Call).InlineValue(_endDrawGBufferPass); // [...]
+                    yield return new MsilInstruction(OpCodes.Br).InlineTarget(end);
+                    call.Labels.Add(noStereo);
+                    yield return call;
+                    var t = new MsilInstruction(OpCodes.Nop);
+                    t.Labels.Add(end);
+                    yield return t;
+                }
+                else
+                    yield return call;
+            }
         }
 
         private static IEnumerable<MsilInstruction> FixDrawCalls(IEnumerable<MsilInstruction> src)
@@ -187,6 +229,18 @@ namespace PluginVR
         [ReflectedMethodInfo(null, "SetViewport", TypeName = Types.TypeStereoRender, ParameterNames = new[] { Types.TypeRenderContext })]
         private static MethodInfo _stereoRenderSetViewport;
 
+        [ReflectedMethodInfo(null, "DrawAuto", TypeName = Types.TypeRenderContext)]
+        private static MethodInfo _rcDrawAuto;
+
+        [ReflectedMethodInfo(null, "BeginDrawGBufferPass", TypeName = Types.TypeStereoRender, ParameterNames = new[] { Types.TypeRenderContext })]
+        private static MethodInfo _beginDrawGBufferPass;
+
+        [ReflectedMethodInfo(null, "SwitchDrawGBufferPass", TypeName = Types.TypeStereoRender, ParameterNames = new[] { Types.TypeRenderContext })]
+        private static MethodInfo _switchDrawGBufferPass;
+
+        [ReflectedMethodInfo(null, "EndDrawGBufferPass", TypeName = Types.TypeStereoRender, ParameterNames = new[] { Types.TypeRenderContext })]
+        private static MethodInfo _endDrawGBufferPass;
+
         private enum StereoRenderRegion
         {
             Fullscreen,
@@ -194,56 +248,6 @@ namespace PluginVR
             Right
         }
 #pragma warning restore 649
-        private static MethodInfo EmitStereoMethod(MethodInfo rcMethod)
-        {
-            var dyn = new DynamicMethod("Stereo" + rcMethod.Name, typeof(void), new[] { rcMethod.DeclaringType }.Concat(rcMethod.GetParameters().Select(x => x.ParameterType)).ToArray());
-            var gen = new LoggingIlGenerator(dyn.GetILGenerator());
-            EmitSetConstantBuffer(_commonFrameConstantsStereoLeftEye);
-            EmitSetViewport(StereoRenderRegion.Left);
-            for (var i = 0; i < dyn.GetParameters().Length; i++)
-                new MsilArgument(i).AsValueLoad().Emit(gen);
-            gen.Emit(OpCodes.Callvirt, rcMethod);
-
-            EmitSetConstantBuffer(_commonFrameConstantsStereoRightEye);
-            EmitSetViewport(StereoRenderRegion.Right);
-            for (var i = 0; i < dyn.GetParameters().Length; i++)
-                new MsilArgument(i).AsValueLoad().Emit(gen);
-            gen.Emit(OpCodes.Callvirt, rcMethod);
-
-            EmitSetConstantBuffer(_commonFrameConstants);
-            EmitSetViewport(StereoRenderRegion.Fullscreen);
-
-            return dyn;
-
-            void EmitSetConstantBuffer(PropertyInfo frameConstants)
-            {
-                gen.Emit(OpCodes.Ldarg_0);
-                gen.Emit(OpCodes.Callvirt, _rcAllShaderStages.GetMethod);
-                gen.Emit(OpCodes.Ldc_I4_0);
-                gen.Emit(OpCodes.Call, frameConstants.GetMethod);
-                gen.Emit(OpCodes.Callvirt, _stageSetConstantBuffer);
-            }
-
-            void EmitSetViewport(StereoRenderRegion region)
-            {
-                gen.Emit(OpCodes.Ldarg_0);
-                switch (region)
-                {
-                    case StereoRenderRegion.Fullscreen:
-                        gen.Emit(OpCodes.Ldc_I4_0);
-                        break;
-                    case StereoRenderRegion.Left:
-                        gen.Emit(OpCodes.Ldc_I4_1);
-                        break;
-                    case StereoRenderRegion.Right:
-                        gen.Emit(OpCodes.Ldc_I4_2);
-                        break;
-                    default:
-                        throw new ArgumentOutOfRangeException(nameof(region), region, null);
-                }
-                gen.Emit(OpCodes.Call, _stereoRenderSetViewport);
-            }
-        }
         #endregion
     }
 }

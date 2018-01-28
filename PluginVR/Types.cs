@@ -17,6 +17,7 @@ namespace PluginVR
         public const string TypeIBuffer = "VRage.Render11.Resources.IBuffer, " + Types.LibRenderDx11;
         public const string TypeStaticGlassPass = "VRageRender.MyStaticGlassPass, " + Types.LibRenderDx11;
         public const string TypeRenderableProxy = "VRageRender.MyRenderableProxy, " + Types.LibRenderDx11;
+        public const string TypeIVertexBuffer = "VRage.Render11.Resources.IVertexBuffer, " + Types.LibRenderDx11;
         public const string TypeRenderableProxy2 = "VRageRender.MyRenderableProxy_2, " + Types.LibRenderDx11;
         public const string TypeHighlightPass = "VRageRender.MyHighlightPass, " + Types.LibRenderDx11;
         public const string TypeForwardPass = "VRageRender.MyForwardPass, " + Types.LibRenderDx11;

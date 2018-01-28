@@ -147,7 +147,7 @@ namespace PluginVR
             }
         }
 
-        private static bool AllowUiHack = false;
+        private static bool AllowUiHack = true;
 
         private static IEnumerable<MsilInstruction> TranspileDrawF(IEnumerable<MsilInstruction> stream, Func<Type, MsilLocal> __localCreator)
         {

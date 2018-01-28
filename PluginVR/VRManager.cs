@@ -7,6 +7,7 @@ using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
+using Medieval.GUI.MainMenu.Options;
 using NLog;
 using Sandbox.Engine.Platform.VideoMode;
 using Sandbox.Graphics.GUI;
@@ -20,8 +21,12 @@ using Torch.Managers.PatchManager.MSIL;
 using Torch.Utils;
 using VRage;
 using VRage.OpenVRWrapper;
+using VRage.Utils;
 using VRageMath;
 using VRageRender;
+
+// ME Edition
+using BtnType = Sandbox.Gui.MyGuiControlImageButton;
 
 namespace PluginVR
 {
@@ -41,7 +46,8 @@ namespace PluginVR
         }
 
 #pragma warning disable 649
-        [ReflectedMethodInfo(null, "RecreateControls", TypeName = "SpaceEngineers.Game.GUI.MyGuiScreenOptionsSpace, SpaceEngineers.Game", Parameters = new[] { typeof(bool) })]
+        // SE: [ReflectedMethodInfo(null, "RecreateControls", TypeName = "SpaceEngineers.Game.GUI.MyGuiScreenOptionsSpace, SpaceEngineers.Game", Parameters = new[] { typeof(bool) })]
+        [ReflectedMethodInfo(typeof(MyOptionsScreen), "RecreateControls")]
         private static MethodInfo _createOptionsControls;
 
         [ReflectedMethodInfo(null, "ApplySettings", TypeName = Types.TypeRender11)]
@@ -51,7 +57,7 @@ namespace PluginVR
         private static Action _stereoStencilMaskInitUsingOVR;
 
         [ReflectedSetter(Name = "ButtonClicked")]
-        private static Action<MyGuiControlButton, Action<MyGuiControlButton>> _onClickBackingField;
+        private static Action<BtnType, Action<BtnType>> _onClickBackingField;
 #pragma warning restore 649
 
         public override void Attach()
@@ -62,7 +68,8 @@ namespace PluginVR
 
             _patchContext.GetPattern(_createOptionsControls).Suffixes.Add(MyMeth(nameof(FixOptionsControls)));
             _patchContext.GetPattern(_renderApplySettings).Prefixes.Add(MyMeth(nameof(InitStereoMode)));
-            CameraMatrixPatch.Patch(_patchContext);
+            // Not for ME
+//            CameraMatrixPatch.Patch(_patchContext);
             BasicRenderPatch.Patch(_patchContext);
             AmbientOcclusionPatch.Patch(_patchContext);
             MyGuiScreenOptionsDisplayVr.Patch(_patchContext);
@@ -95,9 +102,13 @@ namespace PluginVR
 
         private static void FixOptionsControls(MyGuiScreenBase __instance)
         {
+            // SE Edition
+//            var text = MyCommonTexts.ScreenOptionsButtonDisplay;
+            // ME Edition
+            var text = MyStringId.GetOrCompute("ScreenOptionsButtonDisplay");
             foreach (var control in __instance.Controls)
-                if (control is MyGuiControlButton btn && btn.Text != null &&
-                    btn.Text.Equals(MyTexts.Get(MyCommonTexts.ScreenOptionsButtonDisplay).ToString()))
+                if (control is BtnType btn && btn.Text != null &&
+                    btn.Text.Equals(MyTexts.Get(text).ToString()))
                     _onClickBackingField.Invoke(btn, (x) =>
                     {
                         MyGuiSandbox.AddScreen(new MyGuiScreenOptionsDisplayVr());

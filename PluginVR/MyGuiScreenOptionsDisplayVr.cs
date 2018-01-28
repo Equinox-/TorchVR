@@ -19,6 +19,9 @@ using VRage.Utils;
 using VRageMath;
 using VRageRender;
 
+// ME Edition:
+using MyGuiScreenOptionsDisplay=Medieval.GUI.MainMenu.Options.MyDisplayOptionsScreen;
+
 namespace PluginVR
 {
     public class MyGuiScreenOptionsDisplayVr : MyGuiScreenOptionsDisplay
@@ -101,7 +104,7 @@ namespace PluginVR
             if (__instance is MyGuiScreenOptionsDisplayVr gui && gui.m_checkboxEnableVR != null)
             {
                 __result |= gui.m_checkboxEnableVR.IsChecked != deviceSettings.UseStereoRendering;
-                deviceSettings.UseStereoRendering = gui.m_checkboxEnableVR.IsChecked;
+                deviceSettings.UseStereoRendering = true;//gui.m_checkboxEnableVR.IsChecked;
             }
         }
 
@@ -109,7 +112,7 @@ namespace PluginVR
         {
             if (__instance is MyGuiScreenOptionsDisplayVr gui && gui.m_checkboxEnableVR != null)
             {
-                gui.m_checkboxEnableVR.IsChecked = deviceSettings.UseStereoRendering;
+                gui.m_checkboxEnableVR.IsChecked = true;//deviceSettings.UseStereoRendering;
             }
         }
     }
