@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Text;
 using System.Threading.Tasks;
+using NLog;
 using Torch.Managers.PatchManager;
 using Torch.Managers.PatchManager.MSIL;
 using Torch.Managers.PatchManager.Transpile;
@@ -135,7 +136,6 @@ namespace PluginVR
 
         private static IEnumerable<MsilInstruction> FixDrawCalls(IEnumerable<MsilInstruction> src)
         {
-            EnsureStereoMethods();
             foreach (var call in src)
             {
                 if ((call.OpCode == OpCodes.Callvirt || call.OpCode == OpCodes.Call) && call.Operand is MsilOperandInline<MethodBase> op
@@ -157,93 +157,5 @@ namespace PluginVR
                     yield return call;
             }
         }
-
-        private static void EnsureStereoMethods()
-        {
-
-        }
-
-        #region Emit Stereo
-#pragma warning disable 649
-        private const string TypeMyCommon = "VRageRender.MyCommon, " + Types.LibRenderDx11;
-        private const string TypeIConstantBuffer = "VRage.Render11.Resources.IConstantBuffer, " + Types.LibRenderDx11;
-        private const string TypeCommonStage = "VRage.Render11.RenderContext.MyCommonStage, " + Types.LibRenderDx11;
-
-        [ReflectedPropertyInfo(null, "FrameConstantsStereoLeftEye", TypeName = TypeMyCommon)]
-        private static PropertyInfo _commonFrameConstantsStereoLeftEye;
-
-        [ReflectedPropertyInfo(null, "FrameConstants", TypeName = TypeMyCommon)]
-        private static PropertyInfo _commonFrameConstants;
-
-        [ReflectedPropertyInfo(null, "FrameConstantsStereoRightEye", TypeName = TypeMyCommon)]
-        private static PropertyInfo _commonFrameConstantsStereoRightEye;
-
-        [ReflectedMethodInfo(null, "SetConstantBuffer", TypeName = TypeCommonStage, ParameterNames = new[] { Types.TypeInt32, TypeIConstantBuffer })]
-        private static MethodInfo _stageSetConstantBuffer;
-
-        [ReflectedPropertyInfo(null, "AllShaderStages", TypeName = Types.TypeRenderContext)]
-        private static PropertyInfo _rcAllShaderStages;
-
-        [ReflectedMethodInfo(null, "SetViewport", TypeName = Types.TypeStereoRender, ParameterNames = new[] { Types.TypeRenderContext })]
-        private static MethodInfo _stereoRenderSetViewport;
-
-        private enum StereoRenderRegion
-        {
-            Fullscreen,
-            Left,
-            Right
-        }
-#pragma warning restore 649
-        private static MethodInfo EmitStereoMethod(MethodInfo rcMethod)
-        {
-            var dyn = new DynamicMethod("Stereo" + rcMethod.Name, typeof(void), new[] { rcMethod.DeclaringType }.Concat(rcMethod.GetParameters().Select(x => x.ParameterType)).ToArray());
-            var gen = new LoggingIlGenerator(dyn.GetILGenerator());
-            EmitSetConstantBuffer(_commonFrameConstantsStereoLeftEye);
-            EmitSetViewport(StereoRenderRegion.Left);
-            for (var i = 0; i < dyn.GetParameters().Length; i++)
-                new MsilArgument(i).AsValueLoad().Emit(gen);
-            gen.Emit(OpCodes.Callvirt, rcMethod);
-
-            EmitSetConstantBuffer(_commonFrameConstantsStereoRightEye);
-            EmitSetViewport(StereoRenderRegion.Right);
-            for (var i = 0; i < dyn.GetParameters().Length; i++)
-                new MsilArgument(i).AsValueLoad().Emit(gen);
-            gen.Emit(OpCodes.Callvirt, rcMethod);
-
-            EmitSetConstantBuffer(_commonFrameConstants);
-            EmitSetViewport(StereoRenderRegion.Fullscreen);
-
-            return dyn;
-
-            void EmitSetConstantBuffer(PropertyInfo frameConstants)
-            {
-                gen.Emit(OpCodes.Ldarg_0);
-                gen.Emit(OpCodes.Callvirt, _rcAllShaderStages.GetMethod);
-                gen.Emit(OpCodes.Ldc_I4_0);
-                gen.Emit(OpCodes.Call, frameConstants.GetMethod);
-                gen.Emit(OpCodes.Callvirt, _stageSetConstantBuffer);
-            }
-
-            void EmitSetViewport(StereoRenderRegion region)
-            {
-                gen.Emit(OpCodes.Ldarg_0);
-                switch (region)
-                {
-                    case StereoRenderRegion.Fullscreen:
-                        gen.Emit(OpCodes.Ldc_I4_0);
-                        break;
-                    case StereoRenderRegion.Left:
-                        gen.Emit(OpCodes.Ldc_I4_1);
-                        break;
-                    case StereoRenderRegion.Right:
-                        gen.Emit(OpCodes.Ldc_I4_2);
-                        break;
-                    default:
-                        throw new ArgumentOutOfRangeException(nameof(region), region, null);
-                }
-                gen.Emit(OpCodes.Call, _stereoRenderSetViewport);
-            }
-        }
-        #endregion
     }
 }
