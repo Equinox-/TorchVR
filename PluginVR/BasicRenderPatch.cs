@@ -70,6 +70,13 @@ namespace PluginVR
             "SharpDX.Direct3D11.InputLayout, SharpDX.Direct3D11", Types.TypeInt32, Types.TypeInt32, Types.TypeInt32, Types.TypeInt32 })]
         private static MethodInfo _foliageGenRecordCommands;
 
+
+        [ReflectedMethodInfo(null, "RecordCommands", TypeName = "VRageRender.MyFoliageRenderingPass, " + Types.LibRenderDx11, ParameterNames = new[]
+        {
+            Types.TypeRenderableProxy, Types.TypeIVertexBuffer, Types.TypeInt32
+        })]
+        private static MethodInfo _foliageRenderRecordCommands;
+
         [ReflectedMethodInfo(null, "Render", TypeName = "VRageRender.MyCloudRenderer, " + Types.LibRenderDx11)]
         private static MethodInfo _cloudRender;
 
@@ -126,12 +133,46 @@ namespace PluginVR
             // TODO 
             //            ctx.GetPattern(_spritesDraw).Transpilers.Add(fixer);
             //            ctx.GetPattern(_screenDrawQuad).Transpilers.Add(fixer);
+
+            ctx.GetPattern(_foliageRenderRecordCommands).Transpilers.Add(Method(nameof(FoliageRenderFix)));
         }
 
         private static MethodInfo Method(string name)
         {
             return typeof(BasicRenderPatch).GetMethod(name,
                 BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
+        }
+
+        private static IEnumerable<MsilInstruction> FoliageRenderFix(IEnumerable<MsilInstruction> src)
+        {
+            foreach (var call in src)
+            {
+                if ((call.OpCode == OpCodes.Callvirt || call.OpCode == OpCodes.Call) && call.Operand is MsilOperandInline<MethodBase> op
+                    && op.Value == _rcDrawAuto)
+                {
+                    var end = new MsilLabel();
+                    var noStereo = new MsilLabel();
+                    yield return new MsilInstruction(OpCodes.Call).InlineValue(_stereoRenderEnable.GetMethod);
+                    yield return new MsilInstruction(OpCodes.Brfalse).InlineTarget(noStereo);
+                    yield return new MsilInstruction(OpCodes.Dup); // [... RC, RC]
+                    yield return new MsilInstruction(OpCodes.Call).InlineValue(_beginDrawGBufferPass); // [... RC]
+                    yield return new MsilInstruction(OpCodes.Dup); // [... RC, RC]
+                    yield return new MsilInstruction(call.OpCode).InlineValue(_rcDrawAuto); // [... RC]
+                    yield return new MsilInstruction(OpCodes.Dup); // [... RC, RC]
+                    yield return new MsilInstruction(OpCodes.Call).InlineValue(_switchDrawGBufferPass); // [... RC]
+                    yield return new MsilInstruction(OpCodes.Dup); // [... RC, RC]
+                    yield return new MsilInstruction(call.OpCode).InlineValue(_rcDrawAuto); // [... RC]
+                    yield return new MsilInstruction(OpCodes.Call).InlineValue(_endDrawGBufferPass); // [...]
+                    yield return new MsilInstruction(OpCodes.Br).InlineTarget(end);
+                    call.Labels.Add(noStereo);
+                    yield return call;
+                    var t = new MsilInstruction(OpCodes.Nop);
+                    t.Labels.Add(end);
+                    yield return t;
+                }
+                else
+                    yield return call;
+            }
         }
 
         private static IEnumerable<MsilInstruction> FixDrawCalls(IEnumerable<MsilInstruction> src)
@@ -157,5 +198,50 @@ namespace PluginVR
                     yield return call;
             }
         }
+
+        #region Emit Stereo
+#pragma warning disable 649
+        private const string TypeMyCommon = "VRageRender.MyCommon, " + Types.LibRenderDx11;
+        private const string TypeIConstantBuffer = "VRage.Render11.Resources.IConstantBuffer, " + Types.LibRenderDx11;
+        private const string TypeCommonStage = "VRage.Render11.RenderContext.MyCommonStage, " + Types.LibRenderDx11;
+
+        [ReflectedPropertyInfo(null, "FrameConstantsStereoLeftEye", TypeName = TypeMyCommon)]
+        private static PropertyInfo _commonFrameConstantsStereoLeftEye;
+
+        [ReflectedPropertyInfo(null, "FrameConstants", TypeName = TypeMyCommon)]
+        private static PropertyInfo _commonFrameConstants;
+
+        [ReflectedPropertyInfo(null, "FrameConstantsStereoRightEye", TypeName = TypeMyCommon)]
+        private static PropertyInfo _commonFrameConstantsStereoRightEye;
+
+        [ReflectedMethodInfo(null, "SetConstantBuffer", TypeName = TypeCommonStage, ParameterNames = new[] { Types.TypeInt32, TypeIConstantBuffer })]
+        private static MethodInfo _stageSetConstantBuffer;
+
+        [ReflectedPropertyInfo(null, "AllShaderStages", TypeName = Types.TypeRenderContext)]
+        private static PropertyInfo _rcAllShaderStages;
+
+        [ReflectedMethodInfo(null, "SetViewport", TypeName = Types.TypeStereoRender, ParameterNames = new[] { Types.TypeRenderContext })]
+        private static MethodInfo _stereoRenderSetViewport;
+
+        [ReflectedMethodInfo(null, "DrawAuto", TypeName = Types.TypeRenderContext)]
+        private static MethodInfo _rcDrawAuto;
+
+        [ReflectedMethodInfo(null, "BeginDrawGBufferPass", TypeName = Types.TypeStereoRender, ParameterNames = new[] { Types.TypeRenderContext })]
+        private static MethodInfo _beginDrawGBufferPass;
+
+        [ReflectedMethodInfo(null, "SwitchDrawGBufferPass", TypeName = Types.TypeStereoRender, ParameterNames = new[] { Types.TypeRenderContext })]
+        private static MethodInfo _switchDrawGBufferPass;
+
+        [ReflectedMethodInfo(null, "EndDrawGBufferPass", TypeName = Types.TypeStereoRender, ParameterNames = new[] { Types.TypeRenderContext })]
+        private static MethodInfo _endDrawGBufferPass;
+
+        private enum StereoRenderRegion
+        {
+            Fullscreen,
+            Left,
+            Right
+        }
+#pragma warning restore 649
+        #endregion
     }
 }

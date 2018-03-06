@@ -7,14 +7,14 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PluginVR", "PluginVR\Plugin
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
-		Debug|Any CPU = Debug|Any CPU
-		Release|Any CPU = Release|Any CPU
+		Debug_ME|x64 = Debug_ME|x64
+		Debug_SE|x64 = Debug_SE|x64
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{3101BAD3-75E3-4079-9746-00D7483EC8E3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{3101BAD3-75E3-4079-9746-00D7483EC8E3}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{3101BAD3-75E3-4079-9746-00D7483EC8E3}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{3101BAD3-75E3-4079-9746-00D7483EC8E3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3101BAD3-75E3-4079-9746-00D7483EC8E3}.Debug_ME|x64.ActiveCfg = Debug_ME|x64
+		{3101BAD3-75E3-4079-9746-00D7483EC8E3}.Debug_ME|x64.Build.0 = Debug_ME|x64
+		{3101BAD3-75E3-4079-9746-00D7483EC8E3}.Debug_SE|x64.ActiveCfg = Debug_SE|x64
+		{3101BAD3-75E3-4079-9746-00D7483EC8E3}.Debug_SE|x64.Build.0 = Debug_SE|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

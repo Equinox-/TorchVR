@@ -20,8 +20,19 @@ using Torch.Managers.PatchManager.MSIL;
 using Torch.Utils;
 using VRage;
 using VRage.OpenVRWrapper;
+using VRage.Utils;
 using VRageMath;
 using VRageRender;
+
+// ME Edition
+#if MEDIEVAL
+using BtnType = Sandbox.Gui.MyGuiControlImageButton;
+using Medieval.GUI.MainMenu.Options;
+#endif
+#if SPACE
+using BtnType = Sandbox.Graphics.GUI.MyGuiControlButton;
+
+#endif
 
 namespace PluginVR
 {
@@ -41,17 +52,25 @@ namespace PluginVR
         }
 
 #pragma warning disable 649
-        [ReflectedMethodInfo(null, "RecreateControls", TypeName = "SpaceEngineers.Game.GUI.MyGuiScreenOptionsSpace, SpaceEngineers.Game", Parameters = new[] { typeof(bool) })]
+#if SPACE
+        [ReflectedMethodInfo(null, "RecreateControls",
+            TypeName = "SpaceEngineers.Game.GUI.MyGuiScreenOptionsSpace, SpaceEngineers.Game",
+            Parameters = new[] {typeof(bool)})]
+#endif
+#if MEDIEVAL
+        [ReflectedMethodInfo(typeof(MyOptionsScreen), "RecreateControls")]
+#endif
         private static MethodInfo _createOptionsControls;
 
         [ReflectedMethodInfo(null, "ApplySettings", TypeName = Types.TypeRender11)]
         private static MethodInfo _renderApplySettings;
 
-        [ReflectedStaticMethod(Name = "InitUsingOpenVR", TypeName = "VRageRender.MyStereoStencilMask, " + Types.LibRenderDx11)]
+        [ReflectedStaticMethod(Name = "InitUsingOpenVR",
+            TypeName = "VRageRender.MyStereoStencilMask, " + Types.LibRenderDx11)]
         private static Action _stereoStencilMaskInitUsingOVR;
 
         [ReflectedSetter(Name = "ButtonClicked")]
-        private static Action<MyGuiControlButton, Action<MyGuiControlButton>> _onClickBackingField;
+        private static Action<BtnType, Action<BtnType>> _onClickBackingField;
 #pragma warning restore 649
 
         public override void Attach()
@@ -62,11 +81,13 @@ namespace PluginVR
 
             _patchContext.GetPattern(_createOptionsControls).Suffixes.Add(MyMeth(nameof(FixOptionsControls)));
             _patchContext.GetPattern(_renderApplySettings).Prefixes.Add(MyMeth(nameof(InitStereoMode)));
+#if SPACE
             CameraMatrixPatch.Patch(_patchContext);
+#endif
             BasicRenderPatch.Patch(_patchContext);
             AmbientOcclusionPatch.Patch(_patchContext);
             MyGuiScreenOptionsDisplayVr.Patch(_patchContext);
-            UserInterfacePatch.Patch(_patchContext);
+//            UserInterfacePatch.Patch(_patchContext);
         }
 
         public override void Detach()
@@ -95,13 +116,17 @@ namespace PluginVR
 
         private static void FixOptionsControls(MyGuiScreenBase __instance)
         {
+#if SPACE
+            var text = MyCommonTexts.ScreenOptionsButtonDisplay;
+#endif
+#if MEDIEVAL
+            var text = MyStringId.GetOrCompute("ScreenOptionsButtonDisplay");
+#endif
             foreach (var control in __instance.Controls)
-                if (control is MyGuiControlButton btn && btn.Text != null &&
-                    btn.Text.Equals(MyTexts.Get(MyCommonTexts.ScreenOptionsButtonDisplay).ToString()))
-                    _onClickBackingField.Invoke(btn, (x) =>
-                    {
-                        MyGuiSandbox.AddScreen(new MyGuiScreenOptionsDisplayVr());
-                    });
+                if (control is BtnType btn && btn.Text != null &&
+                    btn.Text.Equals(MyTexts.Get(text).ToString()))
+                    _onClickBackingField.Invoke(btn,
+                        (x) => { MyGuiSandbox.AddScreen(new MyGuiScreenOptionsDisplayVr()); });
         }
     }
 }
